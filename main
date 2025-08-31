@@ -1,0 +1,402 @@
+--// Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local localPlayer = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
+local playerGui = localPlayer:WaitForChild("PlayerGui")
+
+--// CONFIGS
+local orbitConfig = { Active=false, Target=nil, Angle=0, Distance=10, Height=5, Speed=2, Keybind=Enum.KeyCode.O }
+local camlockConfig = { Active=false, Target=nil, Keybind=Enum.KeyCode.C }
+local espConfig = { Enabled=false, Color=Color3.fromRGB(0,255,0), Outline=true, ShowName=true, Keybind=Enum.KeyCode.P }
+local highlights = {}
+local billboards = {}
+
+--// GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "BubaWareGUI"
+screenGui.ResetOnSpawn=false
+screenGui.Parent=playerGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0,350,0,400)
+frame.Position = UDim2.new(0.5,-175,0.5,-200)
+frame.BackgroundColor3 = Color3.fromRGB(35,35,35)
+frame.Active=true
+frame.Draggable=true
+frame.Parent=screenGui
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1,0,0,30)
+title.Position = UDim2.new(0,0,0,0)
+title.BackgroundColor3 = Color3.fromRGB(25,25,25)
+title.Text="BubaWare V3"
+title.TextColor3=Color3.fromRGB(0,255,0)
+title.Font=Enum.Font.GothamBold
+title.TextScaled=true
+title.Parent=frame
+
+-- Helper functions
+local function makeButton(text,parent,posY,callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1,-20,0,30)
+    btn.Position = UDim2.new(0,10,0,posY)
+    btn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    btn.TextColor3 = Color3.fromRGB(255,255,255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextScaled=true
+    btn.Text=text
+    btn.Parent=parent
+    btn.MouseButton1Click:Connect(callback)
+    return btn
+end
+
+local function makeTextBox(label,default,parent,posY,callback)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(0.5,-15,0,25)
+    lbl.Position = UDim2.new(0,10,0,posY)
+    lbl.Text=label
+    lbl.Font=Enum.Font.Gotham
+    lbl.TextColor3=Color3.fromRGB(255,255,255)
+    lbl.BackgroundTransparency=1
+    lbl.TextScaled=true
+    lbl.Parent=parent
+
+    local box = Instance.new("TextBox")
+    box.Size=UDim2.new(0.5,-15,0,25)
+    box.Position=UDim2.new(0.5,5,0,posY)
+    box.BackgroundColor3=Color3.fromRGB(60,60,60)
+    box.TextColor3=Color3.fromRGB(255,255,255)
+    box.Font=Enum.Font.Gotham
+    box.TextScaled=true
+    box.ClearTextOnFocus=false
+    box.Text=default
+    box.Parent=parent
+    box.FocusLost:Connect(function()
+        callback(box.Text)
+    end)
+    return box
+end
+
+-- Pages
+local pages = {}
+local function showPage(name)
+    for n,obj in pairs(pages) do
+        obj.Visible=(n==name)
+    end
+end
+
+-- Main Page
+local mainPage = Instance.new("Frame")
+mainPage.Size = UDim2.new(1,0,1,0)
+mainPage.Position = UDim2.new(0,0,0,30)
+mainPage.BackgroundTransparency = 1
+mainPage.Parent = frame
+pages["Main"] = mainPage
+
+makeButton("Orbit Menu",mainPage,10,function() showPage("Orbit") end)
+makeButton("Camlock Menu",mainPage,50,function() showPage("Camlock") end)
+makeButton("ESP Menu",mainPage,90,function() showPage("ESP") end)
+makeButton("Keybinds Menu",mainPage,130,function() showPage("Keybinds") end)
+
+-- Orbit Page
+local orbitPage = Instance.new("Frame")
+orbitPage.Size = UDim2.new(1,0,1,0)
+orbitPage.Position = UDim2.new(0,0,0,30)
+orbitPage.BackgroundTransparency = 1
+orbitPage.Visible = false
+orbitPage.Parent = frame
+pages["Orbit"] = orbitPage
+
+-- Orbit target dropdown
+local orbitDropdown = Instance.new("TextButton")
+orbitDropdown.Size = UDim2.new(1,-20,0,25)
+orbitDropdown.Position = UDim2.new(0,10,0,10)
+orbitDropdown.BackgroundColor3 = Color3.fromRGB(60,60,60)
+orbitDropdown.TextColor3 = Color3.fromRGB(255,255,255)
+orbitDropdown.Text = "Select Target"
+orbitDropdown.TextScaled = true
+orbitDropdown.Font = Enum.Font.GothamBold
+orbitDropdown.Parent = orbitPage
+
+local function updateDropdown()
+    orbitDropdown.Text = "Target: "..(orbitConfig.Target and orbitConfig.Target.Name or "None")
+end
+
+orbitDropdown.MouseButton1Click:Connect(function()
+    local allPlayers = {}
+    for _,plr in pairs(Players:GetPlayers()) do
+        if plr ~= localPlayer then table.insert(allPlayers, plr) end
+    end
+    if #allPlayers == 0 then return end
+    local index = 1
+    if orbitConfig.Target then
+        for i,p in pairs(allPlayers) do
+            if p == orbitConfig.Target then index = i end
+        end
+        index = index + 1
+        if index > #allPlayers then index = 1 end
+    end
+    orbitConfig.Target = allPlayers[index]
+    updateDropdown()
+end)
+
+local orbitDistanceBox = makeTextBox("Distance",tostring(orbitConfig.Distance),orbitPage,50,function(txt) orbitConfig.Distance = tonumber(txt) or orbitConfig.Distance end)
+local orbitHeightBox = makeTextBox("Height",tostring(orbitConfig.Height),orbitPage,90,function(txt) orbitConfig.Height = tonumber(txt) or orbitConfig.Height end)
+local orbitSpeedBox = makeTextBox("Speed",tostring(orbitConfig.Speed),orbitPage,130,function(txt) orbitConfig.Speed = tonumber(txt) or orbitConfig.Speed end)
+local orbitToggleButton = makeButton("Toggle Orbit",orbitPage,170,function()
+    if orbitConfig.Target then
+        orbitConfig.Active = not orbitConfig.Active
+        orbitConfig.Angle = 0
+    end
+end)
+makeButton("Back",orbitPage,210,function() showPage("Main") end)
+
+-- Camlock Page
+local camPage = Instance.new("Frame")
+camPage.Size = UDim2.new(1,0,1,0)
+camPage.Position = UDim2.new(0,0,0,30)
+camPage.BackgroundTransparency = 1
+camPage.Visible=false
+camPage.Parent=frame
+pages["Camlock"]=camPage
+makeButton("Back",camPage,200,function() showPage("Main") end)
+
+-- ESP Page
+local espPage = Instance.new("Frame")
+espPage.Size = UDim2.new(1,0,1,0)
+espPage.Position = UDim2.new(0,0,0,30)
+espPage.BackgroundTransparency = 1
+espPage.Visible=false
+espPage.Parent=frame
+pages["ESP"]=espPage
+
+local toggleOutlineBtn = makeButton("Toggle Outline",espPage,10,function()
+    espConfig.Outline = not espConfig.Outline
+end)
+local toggleNamesBtn = makeButton("Toggle Names",espPage,50,function()
+    espConfig.ShowName = not espConfig.ShowName
+end)
+makeButton("Back",espPage,200,function() showPage("Main") end)
+
+-- Keybinds Page
+local keyPage = Instance.new("Frame")
+keyPage.Size = UDim2.new(1,0,1,0)
+keyPage.Position = UDim2.new(0,0,0,30)
+keyPage.BackgroundTransparency = 1
+keyPage.Visible=false
+keyPage.Parent=frame
+pages["Keybinds"]=keyPage
+
+local keybinds = {
+    OrbitToggle = orbitConfig.Keybind,
+    CamlockToggle = camlockConfig.Keybind,
+    ESPToggle = espConfig.Keybind
+}
+local listening = nil
+
+local function makeKeyButton(name,posY)
+    local btn = makeButton(name..": "..keybinds[name].Name,keyPage,posY,function()
+        btn.Text = name..": Press a key..."
+        listening = name
+    end)
+    return btn
+end
+
+makeKeyButton("OrbitToggle",10)
+makeKeyButton("CamlockToggle",50)
+makeKeyButton("ESPToggle",90)
+makeButton("Back",keyPage,200,function() showPage("Main") end)
+
+-- Status Label
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(0,350,0,50)
+statusLabel.Position = UDim2.new(0,0,1,-50)
+statusLabel.BackgroundTransparency=0.5
+statusLabel.BackgroundColor3=Color3.fromRGB(25,25,25)
+statusLabel.TextColor3=Color3.new(1,1,1)
+statusLabel.TextScaled=true
+statusLabel.Font=Enum.Font.GothamBold
+statusLabel.Text=""
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.TextYAlignment = Enum.TextYAlignment.Top
+statusLabel.Parent=screenGui
+
+--========================================================
+-- ORBIT LOGIC
+--========================================================
+RunService.RenderStepped:Connect(function(dt)
+    if orbitConfig.Active and orbitConfig.Target and orbitConfig.Target.Character and localPlayer.Character then
+        local targetHRP = orbitConfig.Target.Character:FindFirstChild("HumanoidRootPart") or orbitConfig.Target.Character:FindFirstChild("Torso")
+        local myHRP = localPlayer.Character:FindFirstChild("HumanoidRootPart") or localPlayer.Character:FindFirstChild("Torso")
+        if not targetHRP or not myHRP then return end
+
+        orbitConfig.Angle = orbitConfig.Angle + orbitConfig.Speed * dt
+        local pos = targetHRP.Position
+        myHRP.CFrame = CFrame.new(
+            pos.X + orbitConfig.Distance * math.cos(orbitConfig.Angle),
+            pos.Y + orbitConfig.Height,
+            pos.Z + orbitConfig.Distance * math.sin(orbitConfig.Angle)
+        )
+        camera.CFrame = CFrame.new(camera.CFrame.Position,pos)
+    end
+end)
+
+--========================================================
+-- ESP LOGIC (Updated for toggleable Outline and Names)
+--========================================================
+local function updateESP()
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= localPlayer and plr.Character then
+            -- Highlight
+            if espConfig.Enabled then
+                if not highlights[plr] then
+                    local hl = Instance.new("Highlight")
+                    hl.Parent = plr.Character
+                    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    hl.FillTransparency = 1
+                    highlights[plr] = hl
+                end
+                if highlights[plr] then
+                    highlights[plr].OutlineColor = espConfig.Color
+                    highlights[plr].Enabled = espConfig.Outline
+                end
+            else
+                if highlights[plr] then
+                    highlights[plr]:Destroy()
+                    highlights[plr] = nil
+                end
+            end
+
+            -- Billboard (Name)
+            if espConfig.Enabled and espConfig.ShowName then
+                if not billboards[plr] then
+                    local bb = Instance.new("BillboardGui")
+                    bb.Size = UDim2.new(0,100,0,25)
+                    bb.StudsOffset = Vector3.new(0,2.5,0)
+                    bb.AlwaysOnTop = true
+                    bb.Parent = plr.Character:FindFirstChild("Head")
+
+                    local label = Instance.new("TextLabel")
+                    label.Size = UDim2.new(1,0,1,0)
+                    label.BackgroundTransparency = 1
+                    label.Text = plr.Name
+                    label.TextColor3 = espConfig.Color
+                    label.Font = Enum.Font.GothamBold
+                    label.TextScaled = true
+                    label.TextSize = 12
+                    label.Parent = bb
+
+                    billboards[plr] = {gui=bb,label=label}
+                else
+                    billboards[plr].label.TextColor3 = espConfig.Color
+                    billboards[plr].gui.Enabled = true
+                end
+            else
+                if billboards[plr] then
+                    billboards[plr].gui.Enabled = false
+                end
+            end
+        end
+    end
+end
+
+-- Cleanup when players leave
+Players.PlayerRemoving:Connect(function(plr)
+    if highlights[plr] then
+        highlights[plr]:Destroy()
+        highlights[plr] = nil
+    end
+    if billboards[plr] then
+        billboards[plr].gui:Destroy()
+        billboards[plr] = nil
+    end
+end)
+
+
+--========================================================
+-- CAMLOCK LOGIC
+--========================================================
+local function getNearestPlayer()
+    local nearest = nil
+    local shortest = math.huge
+    local myHRP = localPlayer.Character and (localPlayer.Character:FindFirstChild("HumanoidRootPart") or localPlayer.Character:FindFirstChild("Torso"))
+    if not myHRP then return nil end
+
+    for _,plr in pairs(Players:GetPlayers()) do
+        if plr ~= localPlayer and plr.Character then
+            local targetHRP = plr.Character:FindFirstChild("HumanoidRootPart") or plr.Character:FindFirstChild("Torso")
+            if targetHRP then
+                local dist = (targetHRP.Position - myHRP.Position).Magnitude
+                if dist < shortest then
+                    shortest = dist
+                    nearest = plr
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+RunService.RenderStepped:Connect(function()
+    if camlockConfig.Active and localPlayer.Character then
+        local camTarget = camlockConfig.Target
+        if camTarget and camTarget.Character then
+            local head = camTarget.Character:FindFirstChild("Head")
+            if head then
+                camera.CFrame = CFrame.new(camera.CFrame.Position, head.Position)
+            end
+        end
+    end
+    updateESP()
+end)
+
+--========================================================
+-- KEYBINDS LOGIC
+--========================================================
+UserInputService.InputBegan:Connect(function(input,gpe)
+    if gpe then return end
+    if listening then
+        keybinds[listening] = input.KeyCode
+        if listening == "OrbitToggle" then orbitConfig.Keybind = input.KeyCode end
+        if listening == "CamlockToggle" then camlockConfig.Keybind = input.KeyCode end
+        if listening == "ESPToggle" then espConfig.Keybind = input.KeyCode end
+
+        for _,btn in pairs(keyPage:GetChildren()) do
+            if btn:IsA("TextButton") and btn.Text:find(listening) then
+                btn.Text = listening..": "..input.KeyCode.Name
+            end
+        end
+        listening = nil
+    end
+
+    if input.KeyCode == orbitConfig.Keybind then
+        if orbitConfig.Target then orbitConfig.Active = not orbitConfig.Active orbitConfig.Angle=0 end
+    end
+    if input.KeyCode == camlockConfig.Keybind then
+        camlockConfig.Active = not camlockConfig.Active
+        if camlockConfig.Active then
+            camlockConfig.Target = getNearestPlayer()
+        else
+            camlockConfig.Target = nil
+        end
+    end
+    if input.KeyCode == espConfig.Keybind then espConfig.Enabled = not espConfig.Enabled end
+end)
+
+--========================================================
+-- STATUS LABEL UPDATE
+--========================================================
+RunService.RenderStepped:Connect(function()
+    local camlockText = camlockConfig.Target and camlockConfig.Target.Name or "OFF"
+    statusLabel.Text = string.format(
+        "ESP: %s\nCAMLOCK: %s\nORBIT: %s",
+        espConfig.Enabled and "ON" or "OFF",
+        camlockText,
+        orbitConfig.Active and "ON" or "OFF"
+    )
+    updateDropdown()
+end)
